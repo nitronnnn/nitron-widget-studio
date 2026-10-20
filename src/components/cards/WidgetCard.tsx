@@ -47,7 +47,7 @@ export function WidgetCard({ doc, width, onPress, onLongPress }: Props) {
         <Text numberOfLines={1} style={[text.bodySemibold, styles.name]}>
           {doc.name}
         </Text>
-        <Text style={[text.caption, styles.dim]}>
+        <Text numberOfLines={1} style={[text.caption, styles.dim]}>
           {size.label} · {size.grid}
         </Text>
       </View>
@@ -72,6 +72,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     gap: spacing.sm,
   },
-  name: { color: colors.text, flex: 1 },
-  dim: { color: colors.textFaint },
+  name: { color: colors.text, flex: 1, marginRight: spacing.xs },
+  dim: { color: colors.textFaint, flexShrink: 0 },
 });

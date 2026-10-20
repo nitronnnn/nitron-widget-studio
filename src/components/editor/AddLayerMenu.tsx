@@ -75,8 +75,8 @@ const styles = StyleSheet.create({
   title: { color: colors.text, marginBottom: spacing.lg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   cell: {
-    width: '23%',
-    aspectRatio: 0.9,
+    width: '31.5%',
+    aspectRatio: 1.05,
     backgroundColor: colors.surface2,
     borderRadius: radii.md,
     alignItems: 'center',

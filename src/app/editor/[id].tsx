@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  PixelRatio,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,7 @@ import { CanvasPanel } from '@/components/editor/CanvasPanel';
 import { IconBtn } from '@/components/controls/IconBtn';
 import { colors, radii, spacing, text } from '@/theme';
 import { captureWidgetPng, savePngToGallery, sharePng } from '@/utils/exporter';
+import { publishWidgetToHomeScreen } from '@/native/widgetHost';
 import { haptic } from '@/utils/haptics';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -53,6 +55,7 @@ export default function EditorScreen() {
   const canvasRef = useRef<View>(null);
   const [canvasBoxW, setCanvasBoxW] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [hideLive, setHideLive] = useState(false);
 
   // Открываем копию документа из хранилища
   useEffect(() => {
@@ -105,11 +108,52 @@ export default function EditorScreen() {
     }
   };
 
+  /** base.png без живых слоёв + spec.json → filesDir, откуда читает AppWidgetProvider */
+  const installOnHomeScreen = async () => {
+    if (busy) return;
+    setBusy(true);
+    useEditorStore.getState().setCapturing(true);
+    setHideLive(true);
+    await new Promise((r) => setTimeout(r, 220));
+    try {
+      // нативный рендерер рисует виджет в density×2 — картинку отдаём в том же масштабе
+      const px = PixelRatio.get() * 2;
+      const uri = await captureWidgetPng(canvasRef, size.w * px, size.h * px);
+      await publishWidgetToHomeScreen(doc, uri);
+      haptic.success();
+      Alert.alert(
+        'Виджет опубликован',
+        'Теперь добавьте его на рабочий стол:\n\n' +
+          '1. Зажмите пустое место на домашнем экране\n' +
+          '2. «Виджеты» → найдите Nitron\n' +
+          '3. Перетащите виджет на экран\n\n' +
+          'Прозрачность сохраняется. Часы, дата, отсчёт и батарея обновляются сами.',
+      );
+    } catch (e) {
+      haptic.warn();
+      Alert.alert('Не получилось', e instanceof Error ? e.message : String(e));
+    } finally {
+      useEditorStore.getState().setCapturing(false);
+      setHideLive(false);
+      setBusy(false);
+    }
+  };
+
+  const openExportMenu = () => {
+    haptic.select();
+    Alert.alert('Экспорт виджета', 'Куда отправить результат?', [
+      { text: 'На домашний экран', onPress: () => void installOnHomeScreen() },
+      { text: 'PNG в галерею', onPress: () => void doExport('save') },
+      { text: 'Поделиться PNG', onPress: () => void doExport('share') },
+      { text: 'Отмена', style: 'cancel' },
+    ]);
+  };
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + spacing.sm }]}>
       {/* Верхняя панель */}
       <View style={styles.header}>
-        <IconBtn icon="chevron-back" onPress={saveAndBack} />
+        <IconBtn icon="chevron-back" size={36} onPress={saveAndBack} />
         <TextInput
           style={styles.nameInput}
           value={doc.name}
@@ -117,10 +161,9 @@ export default function EditorScreen() {
           placeholder="Название"
           placeholderTextColor={colors.textFaint}
         />
-        <IconBtn icon="arrow-undo" onPress={() => useEditorStore.getState().undo()} disabled={!canUndo} />
-        <IconBtn icon="arrow-redo" onPress={() => useEditorStore.getState().redo()} disabled={!canRedo} />
-        <IconBtn icon="download-outline" onPress={() => void doExport('save')} variant="active" />
-        <IconBtn icon="share-outline" onPress={() => void doExport('share')} />
+        <IconBtn icon="arrow-undo" size={36} onPress={() => useEditorStore.getState().undo()} disabled={!canUndo} />
+        <IconBtn icon="arrow-redo" size={36} onPress={() => useEditorStore.getState().redo()} disabled={!canRedo} />
+        <IconBtn icon="download-outline" size={36} onPress={openExportMenu} variant="active" />
       </View>
 
       {/* Холст */}
@@ -135,6 +178,7 @@ export default function EditorScreen() {
             scale={scale}
             editing={!capturing}
             captureMode={capturing}
+            hideLive={hideLive}
             selectedId={selectedId}
             onSelect={(lid) => useEditorStore.getState().select(lid)}
             onCommitFrame={(lid, frame, rotation) => useEditorStore.getState().commitFrame(lid, frame, rotation)}
@@ -191,14 +235,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
   nameInput: {
     flex: 1,
+    minWidth: 0,
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     backgroundColor: colors.surface2,
     borderRadius: radii.md,

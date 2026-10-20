@@ -11,6 +11,7 @@ import { Checkerboard } from './Checkerboard';
 import { WidgetBackground } from './WidgetBackground';
 import { LayerView } from '@/components/layers/LayerView';
 import { AnimatedFx } from '@/components/layers/AnimatedFx';
+import { isLiveLayer } from '@/native/widgetSpec';
 
 interface CanvasProps {
   doc: WidgetDoc;
@@ -18,6 +19,8 @@ interface CanvasProps {
   editing?: boolean;
   /** скрывает шахматку и рамки выделения — для экспорта PNG */
   captureMode?: boolean;
+  /** скрывает «живые» слои (часы/дата/отсчёт/батарея) — для base.png домашнего виджета */
+  hideLive?: boolean;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onCommitFrame?: (id: string, frame: Frame, rotation: number) => void;
@@ -183,13 +186,14 @@ export function WidgetCanvas({
   scale,
   editing = false,
   captureMode = false,
+  hideLive = false,
   selectedId = null,
   onSelect,
   onCommitFrame,
   canvasRef,
 }: CanvasProps) {
   const size = WIDGET_SIZES[doc.size];
-  const visible = doc.layers.filter((l) => l.visible);
+  const visible = doc.layers.filter((l) => l.visible && !(hideLive && isLiveLayer(l)));
   const showChecker = doc.background.kind === 'transparent' && !captureMode;
 
   const handleSelect = (id: string) => {
