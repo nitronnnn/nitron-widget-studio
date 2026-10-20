@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { WIDGET_SIZES } from '@/constants/widgetSizes';
 import type { Layer, WidgetDoc } from '@/types/widget';
 
@@ -25,7 +26,8 @@ export function isMediaLayer(layer: Layer): boolean {
  */
 export function needsNativeRendering(layer: Layer): boolean {
   if (isLiveLayer(layer)) return true;
-  return layer.type === 'text' && layer.anim !== 'none';
+  if (layer.anim === 'none') return false;
+  return layer.type === 'text' || layer.type === 'icon';
 }
 
 /** Переводим токены нашего форматтера в java.text.SimpleDateFormat. */
@@ -51,7 +53,7 @@ export function toJavaPattern(pattern: string): string {
 }
 
 export interface NativeLiveLayer {
-  op: 'clock' | 'date' | 'battery' | 'countdown' | 'text';
+  op: 'clock' | 'date' | 'battery' | 'countdown' | 'text' | 'icon';
   x: number;
   y: number;
   w: number;
@@ -77,6 +79,8 @@ export interface NativeLiveLayer {
   label?: string;
   /** текст для op='text' — анимированный текстовый слой */
   text?: string;
+  /** codepoint глифа Ionicons для op='icon' */
+  glyph?: number;
   anim?: string;
   animSpeed?: number;
 }
@@ -224,6 +228,22 @@ export function buildWidgetSpec(
         bold: p.bold,
         align: p.align,
         ls: p.letterSpacing,
+        glow: p.glowColor,
+        glowR: p.glowRadius,
+      });
+    } else if (layer.type === 'icon') {
+      const p = layer.props;
+      const glyph = (Ionicons.glyphMap as Record<string, number>)[p.name];
+      if (!glyph) continue;
+      live.push({
+        ...base,
+        op: 'icon',
+        glyph,
+        size: Math.min(f.w, f.h),
+        color: p.color,
+        font: 'system',
+        bold: false,
+        align: 'center',
         glow: p.glowColor,
         glowR: p.glowRadius,
       });

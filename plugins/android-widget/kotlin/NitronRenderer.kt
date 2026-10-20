@@ -31,6 +31,8 @@ object NitronRenderer {
     private const val SUPERSAMPLE = 2f
     private const val DEFAULT_TEXT = "#FFFFFFFF"
 
+    private var cachedIconTypeface: Typeface? = null
+
     fun render(context: Context): Bitmap? = render(context, System.currentTimeMillis())
 
     fun render(context: Context, nowMs: Long): Bitmap? {
@@ -118,6 +120,7 @@ object NitronRenderer {
         when (layer.optString("op")) {
             "countdown" -> drawCountdown(canvas, layer, x, y, w, h, scale, effectiveAlpha)
             "battery" -> drawBattery(canvas, context, layer, x, y, w, h, scale, effectiveAlpha)
+            "icon" -> drawIcon(canvas, context, layer, x, y, w, h, scale, effectiveAlpha)
             else -> {
                 val text = when (layer.optString("op")) {
                     "clock" -> clockText(layer)
@@ -140,6 +143,53 @@ object NitronRenderer {
         canvas.restore()
     }
 
+    /** Глиф Ionicons: codepoint приходит из JS (Ionicons.glyphMap), шрифт — из assets. */
+    private fun drawIcon(
+        canvas: Canvas,
+        context: Context,
+        layer: JSONObject,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        scale: Float,
+        alpha: Int,
+    ) {
+        val glyph = layer.optInt("glyph", 0)
+        if (glyph <= 0) return
+        val typeface = iconTypeface(context) ?: return
+
+        val color = parseColor(layer.optString("color", DEFAULT_TEXT))
+        val glowColor = parseColor(layer.optString("glow", "#00000000"))
+        val glowRadius = layer.optDouble("glowR", 0.0).toFloat() * scale
+        val size = minOf(w, h) * 0.92f
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            this.alpha = alpha
+            textSize = size
+            this.typeface = typeface
+            textAlign = Paint.Align.CENTER
+            if (glowRadius > 0f && Color.alpha(glowColor) > 0) {
+                setShadowLayer(glowRadius, 0f, 0f, glowColor)
+            }
+        }
+        val text = String(Character.toChars(glyph))
+        val cx = x + w / 2f
+        val cy = y + h / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text, cx, cy, paint)
+    }
+
+    private fun iconTypeface(context: Context): Typeface? {
+        if (cachedIconTypeface == null) {
+            cachedIconTypeface = try {
+                Typeface.createFromAsset(context.assets, "fonts/Ionicons.ttf")
+            } catch (t: Throwable) {
+                null
+            }
+        }
+        return cachedIconTypeface
+    }
     /** FX-анимация слоя; возвращает множитель альфы (blink/glow). */
     private fun applyAnim(
         canvas: Canvas,

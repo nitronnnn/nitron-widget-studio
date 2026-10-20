@@ -42,6 +42,24 @@ function withAndroidWidgetSources(config) {
       // Ресурсы: layout / xml / drawable / values
       copyDir(path.join(SRC, 'res'), path.join(appRoot, 'res'));
 
+      // Шрифт иконок — нативный рендерер рисует глифы Ionicons прямо в виджете
+      const iconFont = path.join(
+        cfg.modRequest.projectRoot,
+        'node_modules',
+        '@expo',
+        'vector-icons',
+        'build',
+        'vendor',
+        'react-native-vector-icons',
+        'Fonts',
+        'Ionicons.ttf',
+      );
+      if (fs.existsSync(iconFont)) {
+        const fontsDir = path.join(appRoot, 'assets', 'fonts');
+        fs.mkdirSync(fontsDir, { recursive: true });
+        fs.copyFileSync(iconFont, path.join(fontsDir, 'Ionicons.ttf'));
+      }
+
       return cfg;
     },
   ]);
