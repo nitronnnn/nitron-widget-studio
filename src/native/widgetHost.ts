@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
 import type { WidgetDoc } from '@/types/widget';
 import { buildWidgetSpec } from './widgetSpec';
 
@@ -12,12 +13,17 @@ import { buildWidgetSpec } from './widgetSpec';
 const DIR = 'nitron_widgets';
 
 export function isHomeWidgetSupported(): boolean {
-  return Platform.OS === 'android';
+  // В Expo Go нет нашего нативного AppWidgetProvider — только standalone APK.
+  return Platform.OS === 'android' && Constants.appOwnership !== 'expo';
 }
 
 export async function publishWidgetToHomeScreen(doc: WidgetDoc, pngUri: string): Promise<void> {
   if (!isHomeWidgetSupported()) {
-    throw new Error('Домашние виджеты пока доступны только на Android');
+    throw new Error(
+      Platform.OS === 'android'
+        ? 'Виджеты на домашний экран работают в установленном APK, а не в Expo Go.'
+        : 'Домашние виджеты пока доступны только на Android',
+    );
   }
   const root = FileSystem.documentDirectory;
   if (!root) throw new Error('Нет доступа к файловой системе устройства');
