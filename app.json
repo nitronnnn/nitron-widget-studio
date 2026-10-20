@@ -1,17 +1,19 @@
 {
   "expo": {
-    "name": "nitron-widget-studio",
+    "name": "Nitron WidgetStudio",
     "slug": "nitron-widget-studio",
     "version": "1.0.0",
+    "scheme": "nitron",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#06070B",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#06070B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -20,6 +22,34 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-image",
+      "expo-video",
+      "expo-sharing",
+      "expo-router",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Разрешите доступ к фото, чтобы использовать их в виджетах.",
+          "savePhotosPermission": "Разрешите сохранять экспортированные виджеты в галерею.",
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Разрешите доступ к фото и видео для слоёв виджета.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
