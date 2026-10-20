@@ -28,7 +28,7 @@ import { CanvasPanel } from '@/components/editor/CanvasPanel';
 import { IconBtn } from '@/components/controls/IconBtn';
 import { colors, radii, spacing, text } from '@/theme';
 import { captureWidgetPng, savePngToGallery, sharePng } from '@/utils/exporter';
-import { hasAnimatedLayers, publishWidgetToHomeScreen } from '@/native/widgetHost';
+import { hasAnimatedLayers, openBatterySettings, openOverlayPermissionSettings, publishWidgetToHomeScreen } from '@/native/widgetHost';
 import { haptic } from '@/utils/haptics';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -141,13 +141,30 @@ export default function EditorScreen() {
         '2. «Виджеты» → Nitron\n' +
         '3. Перетащите на экран';
 
-      const liveNote = result.animated
-        ? '\n\nGIF и видео играют, пока работает сервис Nitron. ' +
-          'На Tecno/HiOS обязательно: Настройки → Батарея → Nitron → «Без ограничений», ' +
-          'и разрешите автозапуск. Иначе система остановит анимацию.'
-        : '\n\nЧасы, дата, отсчёт и батарея обновляются сами.';
-
-      Alert.alert('Виджет опубликован', base + liveNote);
+      if (result.animated) {
+        Alert.alert(
+          'GIF/видео готовы к запуску',
+          base +
+            '\n\nЧтобы анимация жила на домашнем экране, Android требует два разрешения. ' +
+            'Без них система остановит плеер.',
+          [
+            {
+              text: 'Разрешить поверх окон',
+              onPress: () => void openOverlayPermissionSettings(),
+            },
+            {
+              text: 'Батарея без ограничений',
+              onPress: () => void openBatterySettings(),
+            },
+            { text: 'Готово', style: 'cancel' },
+          ],
+        );
+      } else {
+        Alert.alert(
+          'Виджет опубликован',
+          base + '\n\nЧасы, дата, отсчёт и батарея обновляются сами.',
+        );
+      }
     } catch (e) {
       haptic.warn();
       Alert.alert('Не получилось', e instanceof Error ? e.message : String(e));

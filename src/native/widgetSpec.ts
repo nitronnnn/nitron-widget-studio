@@ -19,6 +19,15 @@ export function isMediaLayer(layer: Layer): boolean {
   return MEDIA_TYPES.has(layer.type);
 }
 
+/**
+ * Слой нужно рисовать нативно, а не запекать в base.png:
+ * часы/дата/отсчёт/батарея (динамика) + анимированный текст.
+ */
+export function needsNativeRendering(layer: Layer): boolean {
+  if (isLiveLayer(layer)) return true;
+  return layer.type === 'text' && layer.anim !== 'none';
+}
+
 /** Переводим токены нашего форматтера в java.text.SimpleDateFormat. */
 export function toJavaPattern(pattern: string): string {
   return pattern.replace(/MMMM|MMM|YYYY|YY|HH|H|hh|h|mm|m|ss|s|DD|D|dd|A|a/g, (token) => {
@@ -42,7 +51,7 @@ export function toJavaPattern(pattern: string): string {
 }
 
 export interface NativeLiveLayer {
-  op: 'clock' | 'date' | 'battery' | 'countdown';
+  op: 'clock' | 'date' | 'battery' | 'countdown' | 'text';
   x: number;
   y: number;
   w: number;
@@ -66,6 +75,10 @@ export interface NativeLiveLayer {
   accentColor?: string;
   targetMs?: number;
   label?: string;
+  /** текст для op='text' — анимированный текстовый слой */
+  text?: string;
+  anim?: string;
+  animSpeed?: number;
 }
 
 export interface NativeWidgetSpec {
@@ -128,7 +141,7 @@ export function buildWidgetSpec(
   const live: NativeLiveLayer[] = [];
 
   for (const layer of doc.layers) {
-    if (!layer.visible || !isLiveLayer(layer)) continue;
+    if (!layer.visible || !needsNativeRendering(layer)) continue;
     const f = layer.frame;
     const base = {
       x: f.x,
@@ -140,6 +153,8 @@ export function buildWidgetSpec(
       ls: 0,
       glow: '#00000000',
       glowR: 0,
+      anim: layer.anim,
+      animSpeed: layer.animSpeed,
     };
 
     if (layer.type === 'clock') {
@@ -197,8 +212,26 @@ export function buildWidgetSpec(
         targetMs: Date.parse(p.targetISO) || 0,
         label: p.label,
       });
+    } else if (layer.type === 'text') {
+      const p = layer.props;
+      live.push({
+        ...base,
+        op: 'text',
+        text: p.uppercase ? p.text.toUpperCase() : p.text,
+        size: p.fontSize,
+        color: p.color,
+        font: p.fontKey,
+        bold: p.bold,
+        align: p.align,
+        ls: p.letterSpacing,
+        glow: p.glowColor,
+        glowR: p.glowRadius,
+      });
     }
   }
+
+  const animatedMedia = media.length > 0;
+  const animatedText = live.some((l) => !!l.anim && l.anim !== 'none');
 
   return {
     w: size.w,
@@ -207,6 +240,6 @@ export function buildWidgetSpec(
     base: 'base.png',
     live,
     media,
-    animated: media.length > 0,
+    animated: animatedMedia || animatedText,
   };
 }

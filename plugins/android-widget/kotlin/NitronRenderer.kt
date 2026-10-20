@@ -78,7 +78,7 @@ object NitronRenderer {
         val live = spec.optJSONArray("live") ?: JSONArray()
         for (i in 0 until live.length()) {
             try {
-                drawLive(canvas, context, live.getJSONObject(i), scale)
+                drawLive(canvas, context, live.getJSONObject(i), scale, nowMs)
             } catch (t: Throwable) {
                 // один битый слой не должен убивать весь виджет
             }
@@ -100,7 +100,7 @@ object NitronRenderer {
 
     // ---------------------------------------------------------------- layers
 
-    private fun drawLive(canvas: Canvas, context: Context, layer: JSONObject, scale: Float) {
+    private fun drawLive(canvas: Canvas, context: Context, layer: JSONObject, scale: Float, nowMs: Long) {
         val x = (layer.optDouble("x", 0.0) * scale).toFloat()
         val y = (layer.optDouble("y", 0.0) * scale).toFloat()
         val w = (layer.optDouble("w", 10.0) * scale).toFloat()
@@ -112,18 +112,21 @@ object NitronRenderer {
         if (rotation != 0f) {
             canvas.rotate(rotation, x + w / 2f, y + h / 2f)
         }
+        val animAlpha = applyAnim(canvas, layer, x + w / 2f, y + h / 2f, nowMs, scale)
+        val effectiveAlpha = (alpha * animAlpha).toInt().coerceIn(0, 255)
 
         when (layer.optString("op")) {
-            "countdown" -> drawCountdown(canvas, layer, x, y, w, h, scale, alpha)
-            "battery" -> drawBattery(canvas, context, layer, x, y, w, h, scale, alpha)
+            "countdown" -> drawCountdown(canvas, layer, x, y, w, h, scale, effectiveAlpha)
+            "battery" -> drawBattery(canvas, context, layer, x, y, w, h, scale, effectiveAlpha)
             else -> {
                 val text = when (layer.optString("op")) {
                     "clock" -> clockText(layer)
                     "date" -> dateText(layer)
+                    "text" -> layer.optString("text", "")
                     else -> ""
                 }
                 if (text.isNotEmpty()) {
-                    val paint = textPaint(layer, scale, alpha)
+                    val paint = textPaint(layer, scale, effectiveAlpha)
                     val baseline = y + h / 2f - (paint.descent() + paint.ascent()) / 2f
                     val tx = when (paint.textAlign) {
                         Paint.Align.LEFT -> x
@@ -135,6 +138,31 @@ object NitronRenderer {
             }
         }
         canvas.restore()
+    }
+
+    /** FX-анимация слоя; возвращает множитель альфы (blink/glow). */
+    private fun applyAnim(
+        canvas: Canvas,
+        layer: JSONObject,
+        cx: Float,
+        cy: Float,
+        nowMs: Long,
+        scale: Float,
+    ): Float {
+        val speed = layer.optDouble("animSpeed", 1.0).toFloat().coerceIn(0.25f, 3f)
+        var alphaMul = 1f
+        when (layer.optString("anim", "none")) {
+            "pulse" -> {
+                val k = 1f + 0.06f * kotlin.math.sin(nowMs / 620.0 * speed).toFloat()
+                canvas.scale(k, k, cx, cy)
+            }
+            "float" -> canvas.translate(0f, (kotlin.math.sin(nowMs / 700.0 * speed) * 7.0 * scale).toFloat())
+            "slide" -> canvas.translate((kotlin.math.sin(nowMs / 620.0 * speed) * 12.0 * scale).toFloat(), 0f)
+            "spin" -> canvas.rotate(((nowMs / 18.0 * speed) % 360.0).toFloat(), cx, cy)
+            "blink" -> alphaMul = (0.45f + 0.55f * (0.5 + 0.5 * kotlin.math.sin(nowMs / 340.0 * speed))).toFloat()
+            "glow" -> alphaMul = (0.72f + 0.28f * (0.5 + 0.5 * kotlin.math.sin(nowMs / 480.0 * speed))).toFloat()
+        }
+        return alphaMul
     }
 
     private fun textPaint(layer: JSONObject, scale: Float, alpha: Int): Paint {

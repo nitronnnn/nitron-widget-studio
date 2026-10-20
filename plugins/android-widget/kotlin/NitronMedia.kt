@@ -2,6 +2,7 @@ package com.nitron.widgetstudio.nitron
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Movie
 import android.graphics.Paint
@@ -132,7 +133,16 @@ object NitronMedia {
             } catch (t: Throwable) {
                 null
             }
-        } ?: return null
+        }
+
+        // Movie не понимает APNG/WebP-анимацию — покажем хотя бы первый кадр.
+        if (movie == null) {
+            return try {
+                BitmapFactory.decodeFile(key)
+            } catch (t: Throwable) {
+                null
+            }
+        }
 
         val duration = movie.duration().let { if (it <= 0) 1000 else it }
         movie.setTime((nowMs % duration).toInt())

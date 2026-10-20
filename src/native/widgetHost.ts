@@ -1,8 +1,9 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
 import type { Layer, WidgetDoc } from '@/types/widget';
-import { buildMediaLayers, buildWidgetSpec, isMediaLayer } from './widgetSpec';
+import { buildMediaLayers, buildWidgetSpec, isMediaLayer, needsNativeRendering } from './widgetSpec';
 
 /**
  * Установка на домашний экран (Android):
@@ -18,9 +19,43 @@ export function isHomeWidgetSupported(): boolean {
   return Platform.OS === 'android' && Constants.appOwnership !== 'expo';
 }
 
-/** Есть ли GIF/видео — значит виджету нужен «живой» режим и уведомление. */
+/** Есть ли GIF/видео или анимация — значит нужен «живой» режим и уведомление. */
 export function hasAnimatedLayers(doc: WidgetDoc): boolean {
-  return doc.layers.some((l) => l.visible && isMediaLayer(l));
+  return doc.layers.some(
+    (l) => l.visible && (isMediaLayer(l) || (l.anim !== 'none' && needsNativeRendering(l))),
+  );
+}
+
+/**
+ * Android 12+ не даёт запускать foreground-сервис из фона, кроме нескольких
+ * исключений — одно из них «Поверх других приложений». Без него анимация
+ * в виджете не запустится, поэтому ведём пользователя в нужный экран настроек.
+ */
+export async function openOverlayPermissionSettings(): Promise<boolean> {
+  try {
+    await IntentLauncher.startActivityAsync('android.settings.action.MANAGE_OVERLAY_PERMISSION', {
+      data: 'package:com.nitron.widgetstudio',
+    });
+    return true;
+  } catch {
+    try {
+      await IntentLauncher.startActivityAsync('android.settings.APPLICATION_DETAILS_SETTINGS', {
+        data: 'package:com.nitron.widgetstudio',
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/** Экран «Батарея → без ограничений» — на HiOS/MIUI/Realme сервис иначе убивают. */
+export async function openBatterySettings(): Promise<void> {
+  try {
+    await IntentLauncher.startActivityAsync('android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS');
+  } catch {
+    // останется ручной путь через настройки
+  }
 }
 
 function mediaUri(layer: Layer): string | null {

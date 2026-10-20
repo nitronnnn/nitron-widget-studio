@@ -11,7 +11,7 @@ import { Checkerboard } from './Checkerboard';
 import { WidgetBackground } from './WidgetBackground';
 import { LayerView } from '@/components/layers/LayerView';
 import { AnimatedFx } from '@/components/layers/AnimatedFx';
-import { isLiveLayer, isMediaLayer } from '@/native/widgetSpec';
+import { isMediaLayer, needsNativeRendering } from '@/native/widgetSpec';
 
 interface CanvasProps {
   doc: WidgetDoc;
@@ -197,7 +197,7 @@ export function WidgetCanvas({
 }: CanvasProps) {
   const size = WIDGET_SIZES[doc.size];
   const visible = doc.layers.filter(
-    (l) => l.visible && !(hideLive && isLiveLayer(l)) && !(hideMedia && isMediaLayer(l)),
+    (l) => l.visible && !(hideLive && needsNativeRendering(l)) && !(hideMedia && isMediaLayer(l)),
   );
   const showChecker = doc.background.kind === 'transparent' && !captureMode;
 
