@@ -31,7 +31,9 @@ object NitronRenderer {
     private const val SUPERSAMPLE = 2f
     private const val DEFAULT_TEXT = "#FFFFFFFF"
 
-    fun render(context: Context): Bitmap? {
+    fun render(context: Context): Bitmap? = render(context, System.currentTimeMillis())
+
+    fun render(context: Context, nowMs: Long): Bitmap? {
         val dir = widgetDir(context)
         val spec = readSpec(dir) ?: return placeholder(context, "Откройте Nitron и нажмите «На экран»")
 
@@ -64,6 +66,15 @@ object NitronRenderer {
             }
         }
 
+        val media = spec.optJSONArray("media") ?: JSONArray()
+        for (i in 0 until media.length()) {
+            try {
+                NitronMedia.draw(canvas, context, media.getJSONObject(i), dir, scale, nowMs)
+            } catch (t: Throwable) {
+                // битый медиа-слой не должен ломать виджет
+            }
+        }
+
         val live = spec.optJSONArray("live") ?: JSONArray()
         for (i in 0 until live.length()) {
             try {
@@ -73,6 +84,18 @@ object NitronRenderer {
             }
         }
         return bitmap
+    }
+
+    /** Есть ли в виджете GIF/видео — тогда нужен живой сервис кадров. */
+    fun isAnimated(context: Context): Boolean {
+        return try {
+            val spec = readSpec(widgetDir(context)) ?: return false
+            if (spec.optBoolean("animated", false)) return true
+            val media = spec.optJSONArray("media") ?: return false
+            media.length() > 0
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     // ---------------------------------------------------------------- layers

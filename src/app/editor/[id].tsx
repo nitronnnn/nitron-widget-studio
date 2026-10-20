@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  PermissionsAndroid,
   PixelRatio,
   Pressable,
   ScrollView,
@@ -27,7 +28,7 @@ import { CanvasPanel } from '@/components/editor/CanvasPanel';
 import { IconBtn } from '@/components/controls/IconBtn';
 import { colors, radii, spacing, text } from '@/theme';
 import { captureWidgetPng, savePngToGallery, sharePng } from '@/utils/exporter';
-import { publishWidgetToHomeScreen } from '@/native/widgetHost';
+import { hasAnimatedLayers, publishWidgetToHomeScreen } from '@/native/widgetHost';
 import { haptic } from '@/utils/haptics';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -56,6 +57,7 @@ export default function EditorScreen() {
   const [canvasBoxW, setCanvasBoxW] = useState(0);
   const [busy, setBusy] = useState(false);
   const [hideLive, setHideLive] = useState(false);
+  const [hideMedia, setHideMedia] = useState(false);
 
   // Открываем копию документа из хранилища
   useEffect(() => {
@@ -108,33 +110,51 @@ export default function EditorScreen() {
     }
   };
 
-  /** base.png без живых слоёв + spec.json → filesDir, откуда читает AppWidgetProvider */
+  /** base.png без живых слоёв + spec.json + медиа-файлы → filesDir, откуда читает AppWidgetProvider */
   const installOnHomeScreen = async () => {
     if (busy) return;
     setBusy(true);
+
+    const animated = hasAnimatedLayers(doc);
+    if (animated) {
+      try {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      } catch {
+        // старые Android не спрашивают это разрешение
+      }
+    }
+
     useEditorStore.getState().setCapturing(true);
     setHideLive(true);
-    await new Promise((r) => setTimeout(r, 220));
+    setHideMedia(true);
+    await new Promise((r) => setTimeout(r, 260));
     try {
       // нативный рендерер рисует виджет в density×2 — картинку отдаём в том же масштабе
       const px = PixelRatio.get() * 2;
       const uri = await captureWidgetPng(canvasRef, size.w * px, size.h * px);
-      await publishWidgetToHomeScreen(doc, uri);
+      const result = await publishWidgetToHomeScreen(doc, uri);
       haptic.success();
-      Alert.alert(
-        'Виджет опубликован',
-        'Теперь добавьте его на рабочий стол:\n\n' +
-          '1. Зажмите пустое место на домашнем экране\n' +
-          '2. «Виджеты» → найдите Nitron\n' +
-          '3. Перетащите виджет на экран\n\n' +
-          'Прозрачность сохраняется. Часы, дата, отсчёт и батарея обновляются сами.',
-      );
+
+      const base =
+        'Добавьте виджет на рабочий стол:\n' +
+        '1. Зажмите пустое место на домашнем экране\n' +
+        '2. «Виджеты» → Nitron\n' +
+        '3. Перетащите на экран';
+
+      const liveNote = result.animated
+        ? '\n\nGIF и видео играют, пока работает сервис Nitron. ' +
+          'На Tecno/HiOS обязательно: Настройки → Батарея → Nitron → «Без ограничений», ' +
+          'и разрешите автозапуск. Иначе система остановит анимацию.'
+        : '\n\nЧасы, дата, отсчёт и батарея обновляются сами.';
+
+      Alert.alert('Виджет опубликован', base + liveNote);
     } catch (e) {
       haptic.warn();
       Alert.alert('Не получилось', e instanceof Error ? e.message : String(e));
     } finally {
       useEditorStore.getState().setCapturing(false);
       setHideLive(false);
+      setHideMedia(false);
       setBusy(false);
     }
   };
@@ -179,6 +199,7 @@ export default function EditorScreen() {
             editing={!capturing}
             captureMode={capturing}
             hideLive={hideLive}
+            hideMedia={hideMedia}
             selectedId={selectedId}
             onSelect={(lid) => useEditorStore.getState().select(lid)}
             onCommitFrame={(lid, frame, rotation) => useEditorStore.getState().commitFrame(lid, frame, rotation)}

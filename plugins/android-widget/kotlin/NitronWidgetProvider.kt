@@ -28,6 +28,7 @@ class NitronWidgetProvider : AppWidgetProvider() {
             renderWidget(context, appWidgetManager, id)
         }
         scheduleTick(context)
+        syncLiveService(context)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -47,6 +48,7 @@ class NitronWidgetProvider : AppWidgetProvider() {
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
         cancelTick(context)
+        NitronLiveService.stop(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -62,6 +64,7 @@ class NitronWidgetProvider : AppWidgetProvider() {
             for (id in ids) {
                 renderWidget(context, manager, id)
             }
+            syncLiveService(context)
         } catch (t: Throwable) {
             // Никогда не падаем в broadcast: лаунчер покажет ошибку виджета.
         }
@@ -97,6 +100,15 @@ class NitronWidgetProvider : AppWidgetProvider() {
                 alarm.setInexactRepeating(AlarmManager.ELAPSED_REALTIME, first, TICK_MS, tickIntent(context))
             } catch (t: Throwable) {
                 // без будильника виджет просто не будет тикать
+            }
+        }
+
+        /** Включает/выключает живой сервис в зависимости от наличия GIF/видео. */
+        fun syncLiveService(context: Context) {
+            if (NitronRenderer.isAnimated(context)) {
+                NitronLiveService.start(context)
+            } else {
+                NitronLiveService.stop(context)
             }
         }
 

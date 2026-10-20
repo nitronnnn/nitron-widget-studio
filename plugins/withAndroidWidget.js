@@ -49,8 +49,25 @@ function withAndroidWidgetSources(config) {
 
 function withAndroidWidgetManifest(config) {
   return withAndroidManifest(config, (cfg) => {
-    const app = AndroidConfig.Manifest.getMainApplicationOrThrow(cfg.modResults);
+    const manifest = cfg.modResults;
+
+    // Разрешения для foreground-сервиса, который проигрывает GIF/видео в виджете.
+    manifest.manifest['uses-permission'] = manifest.manifest['uses-permission'] || [];
+    const perms = [
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+      'android.permission.POST_NOTIFICATIONS',
+    ];
+    for (const name of perms) {
+      const exists = manifest.manifest['uses-permission'].some((p) => p.$ && p.$['android:name'] === name);
+      if (!exists) {
+        manifest.manifest['uses-permission'].push({ $: { 'android:name': name } });
+      }
+    }
+
+    const app = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
     app.receiver = app.receiver || [];
+    app.service = app.service || [];
 
     const already = app.receiver.some(
       (r) => r.$ && r.$['android:name'] === '.nitron.NitronWidgetProvider',
@@ -75,10 +92,23 @@ function withAndroidWidgetManifest(config) {
         ],
       });
     }
+
+    // Foreground-сервис: проигрывает кадры GIF/видео в виджете.
+    const serviceName = '.nitron.NitronLiveService';
+    const hasService = app.service.some((s) => s.$ && s.$['android:name'] === serviceName);
+    if (!hasService) {
+      app.service.push({
+        $: {
+          'android:name': serviceName,
+          'android:exported': 'false',
+          'android:foregroundServiceType': 'mediaPlayback',
+        },
+      });
+    }
+
     return cfg;
   });
 }
-
 module.exports = function withAndroidWidget(config) {
   config = withAndroidWidgetSources(config);
   config = withAndroidWidgetManifest(config);

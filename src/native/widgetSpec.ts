@@ -8,9 +8,15 @@ import type { Layer, WidgetDoc } from '@/types/widget';
  */
 
 const LIVE_TYPES: ReadonlySet<string> = new Set(['clock', 'date', 'battery', 'countdown']);
+const MEDIA_TYPES: ReadonlySet<string> = new Set(['gif', 'video']);
 
 export function isLiveLayer(layer: Layer): boolean {
   return LIVE_TYPES.has(layer.type);
+}
+
+/** GIF и видео нельзя «запечь» в PNG — их проигрывает нативный сервис кадров. */
+export function isMediaLayer(layer: Layer): boolean {
+  return MEDIA_TYPES.has(layer.type);
 }
 
 /** Переводим токены нашего форматтера в java.text.SimpleDateFormat. */
@@ -68,9 +74,56 @@ export interface NativeWidgetSpec {
   radius: number;
   base: string;
   live: NativeLiveLayer[];
+  media: NativeMediaLayer[];
+  animated: boolean;
 }
 
-export function buildWidgetSpec(doc: WidgetDoc): NativeWidgetSpec {
+export interface NativeMediaLayer {
+  kind: 'gif' | 'video';
+  /** путь относительно nitron_widgets/ */
+  file: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rot: number;
+  opacity: number;
+  radius: number;
+  fit: string;
+  anim: string;
+  animSpeed: number;
+}
+
+/** Медиа-слои для нативного плеера. Файлы копируются в widgetHost. */
+export function buildMediaLayers(doc: WidgetDoc, fileNames: Record<string, string>): NativeMediaLayer[] {
+  const media: NativeMediaLayer[] = [];
+  for (const layer of doc.layers) {
+    if (!layer.visible || !isMediaLayer(layer)) continue;
+    const file = fileNames[layer.id];
+    if (!file) continue;
+    const props = layer.props as { fit: string; radius: number };
+    media.push({
+      kind: layer.type === 'gif' ? 'gif' : 'video',
+      file,
+      x: layer.frame.x,
+      y: layer.frame.y,
+      w: layer.frame.w,
+      h: layer.frame.h,
+      rot: layer.rotation,
+      opacity: layer.opacity,
+      radius: props.radius ?? 0,
+      fit: props.fit ?? 'cover',
+      anim: layer.anim,
+      animSpeed: layer.animSpeed,
+    });
+  }
+  return media;
+}
+
+export function buildWidgetSpec(
+  doc: WidgetDoc,
+  media: NativeMediaLayer[] = [],
+): NativeWidgetSpec {
   const size = WIDGET_SIZES[doc.size];
   const live: NativeLiveLayer[] = [];
 
@@ -147,5 +200,13 @@ export function buildWidgetSpec(doc: WidgetDoc): NativeWidgetSpec {
     }
   }
 
-  return { w: size.w, h: size.h, radius: doc.radius, base: 'base.png', live };
+  return {
+    w: size.w,
+    h: size.h,
+    radius: doc.radius,
+    base: 'base.png',
+    live,
+    media,
+    animated: media.length > 0,
+  };
 }
